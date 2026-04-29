@@ -666,11 +666,205 @@
     <div class="toast" id="toast"></div>
 
     <script>
+        // =============================================
+        // GOOGLE APPS SCRIPT URL
+        // Ganti URL di bawah ini dengan URL Web App Google Apps Script kamu.
+        // Cara deploy: buka Google Apps Script → buat project baru → paste kode Code.gs → Deploy → Web App
+        // Set "Who has access" ke "Anyone" agar form bisa diakses publik.
+        // =============================================
+        const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzzFXK8pjhr2JgrFUfquIJmcmFemRjiNDmSNndkpHFf4BNXQpeNnRTsqnr6YXYI1xpFqA/exec';
+
         // Store uploaded files
         const uploadedFiles = { 1: [], 2: [] };
         const MAX_FILES = 5;
         const MAX_SIZE_MB = 10;
+        let isSubmitting = false;
 
+        // =============================================
+        // Convert File to Base64
+        // =============================================
+        function fileToBase64(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => {
+                    const base64 = reader.result.split(',')[1];
+                    resolve(base64);
+                };
+                reader.onerror = (error) => reject(error);
+                reader.readAsDataURL(file);
+            });
+        }
+
+        // =============================================
+        // Upload satu file ke Google Drive via Apps Script
+        // =============================================
+        async function uploadFileToDrive(file, folderName, progressCallback) {
+            const base64Data = await fileToBase64(file);
+
+            const formData = new FormData();
+            formData.append('fileData', base64Data);
+            formData.append('fileName', file.name);
+            formData.append('mimeType', file.type || 'application/octet-stream');
+            formData.append('folderName', folderName);
+
+            // Gunakan XMLHttpRequest untuk progress tracking
+            return new Promise((resolve, reject) => {
+                const xhr = new XMLHttpRequest();
+
+                xhr.upload.addEventListener('progress', (e) => {
+                    if (e.lengthComputable && progressCallback) {
+                        const percent = Math.round((e.loaded / e.total) * 100);
+                        progressCallback(percent);
+                    }
+                });
+
+                xhr.addEventListener('load', () => {
+                    if (xhr.status === 200) {
+                        try {
+                            const response = JSON.parse(xhr.responseText);
+                            if (response.status === 'success') {
+                                resolve(response);
+                            } else {
+                                reject(new Error(response.message || 'Gagal upload file'));
+                            }
+                        } catch (e) {
+                            reject(new Error('Response tidak valid dari server'));
+                        }
+                    } else {
+                        reject(new Error(`HTTP Error: ${xhr.status}`));
+                    }
+                });
+
+                xhr.addEventListener('error', () => {
+                    reject(new Error('Gagal terhubung ke server. Pastikan APPS_SCRIPT_URL benar.'));
+                });
+
+                xhr.addEventListener('timeout', () => {
+                    reject(new Error('Request timeout. Coba lagi.'));
+                });
+
+                xhr.open('POST', APPS_SCRIPT_URL, true);
+                xhr.timeout = 300000; // 5 menit timeout
+                xhr.send(formData);
+            });
+        }
+
+        // =============================================
+        // Upload semua file dari satu section
+        // =============================================
+        async function uploadAllFilesInSection(section, folderName) {
+            const files = uploadedFiles[section];
+            const progressBar = document.getElementById(`progress-${section}`);
+            const fill = progressBar.querySelector('.fill');
+            const totalFiles = files.length;
+
+            if (totalFiles === 0) return { success: true, files: [] };
+
+            progressBar.classList.add('active');
+            let completedFiles = 0;
+            const results = [];
+
+            for (let i = 0; i < files.length; i++) {
+                const currentProgress = Math.round((completedFiles / totalFiles) * 100);
+                fill.style.width = currentProgress + '%';
+
+                try {
+                    const result = await uploadFileToDrive(
+                        files[i],
+                        folderName,
+                        (percent) => {
+                            const fileProgress = percent / totalFiles;
+                            const totalProgress = Math.round(((completedFiles + fileProgress / 100) / totalFiles) * 100);
+                            fill.style.width = totalProgress + '%';
+                        }
+                    );
+                    results.push({ file: files[i].name, status: 'success', url: result.url });
+                } catch (error) {
+                    results.push({ file: files[i].name, status: 'error', error: error.message });
+                    throw error; // Stop on first error
+                }
+
+                completedFiles++;
+            }
+
+            fill.style.width = '100%';
+
+            setTimeout(() => {
+                progressBar.classList.remove('active');
+                fill.style.width = '0%';
+            }, 800);
+
+            return { success: true, files: results };
+        }
+
+        // =============================================
+        // Submit Form - Upload ke Google Drive
+        // =============================================
+        async function submitForm() {
+            if (isSubmitting) {
+                showToast('Mohon tunggu, sedang mengupload...');
+                return;
+            }
+
+            // Validasi
+            if (uploadedFiles[1].length === 0 && uploadedFiles[2].length === 0) {
+                showToast('Silakan upload file terlebih dahulu!');
+                return;
+            }
+
+            if (uploadedFiles[1].length === 0) {
+                showToast('Upload tugas Sesi-1 wajib!');
+                return;
+            }
+
+            if (uploadedFiles[2].length === 0) {
+                showToast('Upload tugas Sesi-2 wajib!');
+                return;
+            }
+
+            // Cek APPS_SCRIPT_URL sudah diganti
+            if (APPS_SCRIPT_URL.includes('GANTI_DENGAN_ID_KAMU')) {
+                showToast('ERROR: Ganti APPS_SCRIPT_URL dengan URL Google Apps Script kamu!');
+                return;
+            }
+
+            isSubmitting = true;
+            const submitBtn = document.querySelector('.submit-btn');
+            const originalText = submitBtn.textContent;
+            submitBtn.textContent = 'Mengupload...';
+            submitBtn.disabled = true;
+            submitBtn.style.opacity = '0.7';
+
+            try {
+                // Upload file Sesi-1
+                showToast('Mengupload file Sesi-1...');
+                await uploadAllFilesInSection(1, 'Praktikum_Siber_3_Sesi1');
+
+                // Upload file Sesi-2
+                showToast('Mengupload file Sesi-2...');
+                await uploadAllFilesInSection(2, 'Praktikum_Siber_3_Sesi2');
+
+                showToast('Formulir berhasil dikirim ke Google Drive! Terima kasih.');
+
+                // Reset setelah berhasil
+                setTimeout(() => {
+                    clearForm();
+                }, 2000);
+
+            } catch (error) {
+                showToast('Gagal upload: ' + error.message);
+                console.error('Upload error:', error);
+            } finally {
+                isSubmitting = false;
+                submitBtn.textContent = originalText;
+                submitBtn.disabled = false;
+                submitBtn.style.opacity = '1';
+            }
+        }
+
+        // =============================================
+        // Handle file selection (tetap sama)
+        // =============================================
         function handleFiles(section, files) {
             const list = uploadedFiles[section];
 
@@ -690,7 +884,7 @@
 
             renderFileList(section);
 
-            // Simulate progress
+            // Simulate progress saat menambahkan file
             const progressBar = document.getElementById(`progress-${section}`);
             const fill = progressBar.querySelector('.fill');
             progressBar.classList.add('active');
@@ -698,7 +892,7 @@
 
             let progress = 0;
             const interval = setInterval(() => {
-                progress += 10;
+                progress += 20;
                 fill.style.width = progress + '%';
                 if (progress >= 100) {
                     clearInterval(interval);
@@ -707,7 +901,7 @@
                         fill.style.width = '0%';
                     }, 500);
                 }
-            }, 50);
+            }, 40);
         }
 
         function renderFileList(section) {
@@ -737,30 +931,6 @@
             return (bytes / 1048576).toFixed(1) + ' MB';
         }
 
-        function submitForm() {
-            if (uploadedFiles[1].length === 0 && uploadedFiles[2].length === 0) {
-                showToast('Silakan upload file terlebih dahulu!');
-                return;
-            }
-
-            if (uploadedFiles[1].length === 0) {
-                showToast('Upload tugas Sesi-1 wajib!');
-                return;
-            }
-
-            if (uploadedFiles[2].length === 0) {
-                showToast('Upload tugas Sesi-2 wajib!');
-                return;
-            }
-
-            showToast('Formulir berhasil dikirim! Terima kasih.');
-
-            // Reset after submission
-            setTimeout(() => {
-                clearForm();
-            }, 2000);
-        }
-
         function clearForm() {
             uploadedFiles[1] = [];
             uploadedFiles[2] = [];
@@ -776,7 +946,6 @@
             navigator.clipboard.writeText(url).then(() => {
                 showToast('Link berhasil disalin!');
             }).catch(() => {
-                // Fallback
                 const textarea = document.createElement('textarea');
                 textarea.value = url;
                 document.body.appendChild(textarea);

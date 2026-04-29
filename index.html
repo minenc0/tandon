@@ -1,6 +1,120 @@
 <!DOCTYPE html>
-<html>
+<html lang="id">
 <head>
-  <meta http-equiv="https://script.google.com/macros/s/AKfycbyKUUDI4ibEuejBEBTmQEeadfZm59KNjOrsb6Tq1oCwDcVYCZXjK1Xm3iofNTs8bVGX/exec">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Upload Tugas</title>
+
+<!-- Firebase -->
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-storage-compat.js"></script>
+
+<script>
+const firebaseConfig = {
+  apiKey: "AIzaSyCqPguVxxaN7EDFGCpj_FXh7jS0HN10BUI",
+  authDomain: "tandon-f7841.firebaseapp.com",
+  projectId: "tandon-f7841",
+  storageBucket: "tandon-f7841.firebasestorage.app",
+  messagingSenderId: "845955146851",
+  appId: "1:845955146851:web:78fc7bfbe860ceaf90c456"
+};
+
+firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
+const storage = firebase.storage();
+</script>
+
+<style>
+body {
+  font-family: Arial;
+  background:#0f172a;
+  color:white;
+  display:flex;
+  justify-content:center;
+  align-items:center;
+  height:100vh;
+}
+.card {
+  background:#1e293b;
+  padding:20px;
+  border-radius:12px;
+  width:350px;
+}
+input, textarea {
+  width:100%;
+  padding:10px;
+  margin:5px 0;
+  border-radius:6px;
+  border:none;
+}
+button {
+  width:100%;
+  padding:12px;
+  background:#10b981;
+  color:white;
+  border:none;
+  border-radius:8px;
+  cursor:pointer;
+}
+</style>
 </head>
+
+<body>
+
+<div class="card">
+<h2>Upload Tugas</h2>
+
+<input id="nama" placeholder="Nama">
+<input id="nim" placeholder="NIM">
+<input id="kelas" placeholder="Kelas">
+<input type="file" id="file" multiple>
+<textarea id="note" placeholder="Catatan"></textarea>
+
+<button onclick="kirim()">Kirim</button>
+<p id="status"></p>
+</div>
+
+<script>
+async function kirim() {
+  const nama = document.getElementById("nama").value;
+  const nim = document.getElementById("nim").value;
+  const kelas = document.getElementById("kelas").value;
+  const note = document.getElementById("note").value;
+  const files = document.getElementById("file").files;
+
+  if(!nama || !nim || !kelas || files.length === 0){
+    alert("Lengkapi data!");
+    return;
+  }
+
+  document.getElementById("status").innerText = "Uploading...";
+
+  let uploaded = [];
+
+  for(let file of files){
+    const ref = storage.ref("tugas/" + Date.now() + "_" + file.name);
+    await ref.put(file);
+    const url = await ref.getDownloadURL();
+
+    uploaded.push({
+      name:file.name,
+      url:url
+    });
+  }
+
+  await db.collection("submissions").add({
+    nama,
+    nim,
+    kelas,
+    note,
+    files:uploaded,
+    waktu:new Date()
+  });
+
+  document.getElementById("status").innerText = "Berhasil upload!";
+}
+</script>
+
+</body>
 </html>

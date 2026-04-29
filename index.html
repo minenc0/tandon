@@ -806,19 +806,9 @@
                 return;
             }
 
-            // Validasi
+            // Validasi: minimal salah satu sesi punya file
             if (uploadedFiles[1].length === 0 && uploadedFiles[2].length === 0) {
-                showToast('Silakan upload file terlebih dahulu!');
-                return;
-            }
-
-            if (uploadedFiles[1].length === 0) {
-                showToast('Upload tugas Sesi-1 wajib!');
-                return;
-            }
-
-            if (uploadedFiles[2].length === 0) {
-                showToast('Upload tugas Sesi-2 wajib!');
+                showToast('Silakan upload file di salah satu sesi!');
                 return;
             }
 
@@ -836,13 +826,17 @@
             submitBtn.style.opacity = '0.7';
 
             try {
-                // Upload file Sesi-1
-                showToast('Mengupload file Sesi-1...');
-                await uploadAllFilesInSection(1, 'Praktikum_Siber_3_Sesi1');
+                // Upload file Sesi-1 (jika ada)
+                if (uploadedFiles[1].length > 0) {
+                    showToast('Mengupload file Sesi-1...');
+                    await uploadAllFilesInSection(1, 'Praktikum_Siber_3_Sesi1');
+                }
 
-                // Upload file Sesi-2
-                showToast('Mengupload file Sesi-2...');
-                await uploadAllFilesInSection(2, 'Praktikum_Siber_3_Sesi2');
+                // Upload file Sesi-2 (jika ada)
+                if (uploadedFiles[2].length > 0) {
+                    showToast('Mengupload file Sesi-2...');
+                    await uploadAllFilesInSection(2, 'Praktikum_Siber_3_Sesi2');
+                }
 
                 showToast('Formulir berhasil dikirim ke Google Drive! Terima kasih.');
 
